@@ -1,0 +1,113 @@
+version: '3.9'
+
+# ============================================
+# Paper Writing — 生产部署（给部署者用）
+# 所有配置走环境变量，不要在这里写敏感数据
+# ============================================
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pw-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-paper_writing}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - '127.0.0.1:${DB_PORT:-5433}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-paper_writing}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pw-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: pw-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6381}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pw-network
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/goingu/paper-writing-standalone/backend}:${IMAGE_TAG:-main}
+    container_name: pw-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-paper_writing}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-lax}
+      AUTH_COOKIE_PATH: ${AUTH_COOKIE_PATH:-/}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      # License
+      LICENSE_CODE: ${LICENSE_CODE}
+      ACTIVATION_MANAGER_URL: ${ACTIVATION_MANAGER_URL:-http://103.146.53.97:8747}
+      ACTIVATION_MANAGER_PROJECT: ${ACTIVATION_MANAGER_PROJECT:-paper-writing-saas}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3001/public-config']
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    networks:
+      - pw-network
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/goingu/paper-writing-standalone/frontend}:${IMAGE_TAG:-main}
+    container_name: pw-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: /api
+      API_BASE_URL: http://backend:3001
+      DOCKER_ENV: 'true'
+    depends_on:
+      - backend
+    ports:
+      - '${FRONTEND_PORT:-8090}:3000'
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000']
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    networks:
+      - pw-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  pw-network:
+    driver: bridge
