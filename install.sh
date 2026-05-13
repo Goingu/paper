@@ -3,9 +3,14 @@
 # Paper Writing — 一键部署脚本
 #
 # 用法:
-#   curl -fsSL https://raw.githubusercontent.com/Goingu/paper/main/install.sh | bash -s YOUR_LICENSE_CODE
+#   curl -fsSL https://raw.githubusercontent.com/Goingu/paper/main/install.sh | bash -s 激活码 邮箱 密码
 #   或:
-#   wget -qO- https://raw.githubusercontent.com/Goingu/paper/main/install.sh | bash -s YOUR_LICENSE_CODE
+#   wget -qO- https://raw.githubusercontent.com/Goingu/paper/main/install.sh | bash -s 激活码 邮箱 密码
+#
+# 参数:
+#   激活码 - 必填，购买后获得的激活码
+#   邮箱   - 可选，管理员邮箱（默认 admin@paperbanana.com）
+#   密码   - 可选，管理员密码（至少 8 位，不填则自动生成）
 # ==============================================================
 set -e
 
@@ -196,6 +201,27 @@ docker exec pw-backend npx prisma migrate deploy 2>/dev/null || docker exec pw-b
 # --- 创建默认管理员 -------------------------------------------
 ADMIN_EMAIL="${2:-admin@paperbanana.com}"
 ADMIN_PASS="${3:-}"
+
+# 校验密码长度（后端要求至少 8 位）
+if [[ -n "${ADMIN_PASS}" && ${#ADMIN_PASS} -lt 8 ]]; then
+  warn "您提供的密码少于 8 位，不符合系统要求"
+  # 如果是交互式终端，提示重新输入
+  if [[ -t 0 ]]; then
+    while true; do
+      read -sp "请输入新的管理员密码（至少 8 位）: " ADMIN_PASS
+      echo ""
+      if [[ ${#ADMIN_PASS} -ge 8 ]]; then
+        break
+      fi
+      warn "密码至少 8 位，请重新输入"
+    done
+  else
+    # 非交互式（pipe 模式），自动生成随机密码
+    warn "非交互模式，自动生成随机密码"
+    ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin123456")
+  fi
+fi
+
 if [[ -z "${ADMIN_PASS}" ]]; then
   ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin123456")
 fi
