@@ -32,11 +32,17 @@ fail()  { echo "${RED}[X]${NC} $*" >&2; exit 1; }
 # --- 前置检查 -------------------------------------------------
 LICENSE_CODE="${1:-${LICENSE_CODE:-}}"
 if [[ -z "${LICENSE_CODE}" ]]; then
-  fail "请提供激活码。用法: curl -fsSL <url> | bash -s YOUR_LICENSE_CODE"
+  fail "请提供激活码。用法: curl -fsSL <url> | bash -s 激活码 邮箱 密码"
 fi
 
 if [[ $EUID -ne 0 ]]; then
   fail "请用 root 用户运行（sudo -i 切换后再执行）"
+fi
+
+# 提前校验密码（避免拉完镜像才报错）
+_ADMIN_PASS_CHECK="${3:-}"
+if [[ -n "${_ADMIN_PASS_CHECK}" && ${#_ADMIN_PASS_CHECK} -lt 8 ]]; then
+  fail "密码至少 8 位，您提供的只有 ${#_ADMIN_PASS_CHECK} 位。请修改后重新运行。"
 fi
 
 info "准备部署 Paper Writing 到 ${DEPLOY_DIR}"
@@ -201,26 +207,6 @@ docker exec pw-backend npx prisma migrate deploy 2>/dev/null || docker exec pw-b
 # --- 创建默认管理员 -------------------------------------------
 ADMIN_EMAIL="${2:-admin@paperbanana.com}"
 ADMIN_PASS="${3:-}"
-
-# 校验密码长度（后端要求至少 8 位）
-if [[ -n "${ADMIN_PASS}" && ${#ADMIN_PASS} -lt 8 ]]; then
-  warn "您提供的密码少于 8 位，不符合系统要求"
-  # 如果是交互式终端，提示重新输入
-  if [[ -t 0 ]]; then
-    while true; do
-      read -sp "请输入新的管理员密码（至少 8 位）: " ADMIN_PASS
-      echo ""
-      if [[ ${#ADMIN_PASS} -ge 8 ]]; then
-        break
-      fi
-      warn "密码至少 8 位，请重新输入"
-    done
-  else
-    # 非交互式（pipe 模式），自动生成随机密码
-    warn "非交互模式，自动生成随机密码"
-    ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin123456")
-  fi
-fi
 
 if [[ -z "${ADMIN_PASS}" ]]; then
   ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin123456")
