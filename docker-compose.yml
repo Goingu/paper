@@ -63,8 +63,6 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       # License
       LICENSE_CODE: ${LICENSE_CODE}
-      ACTIVATION_MANAGER_URL: ${ACTIVATION_MANAGER_URL:-http://103.146.53.97:8747}
-      ACTIVATION_MANAGER_PROJECT: ${ACTIVATION_MANAGER_PROJECT:-paper-writing-saas}
     depends_on:
       postgres:
         condition: service_healthy
