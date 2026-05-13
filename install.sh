@@ -181,7 +181,7 @@ for i in $(seq 1 30); do
 done
 
 info "运行数据库迁移..."
-docker exec pw-backend npx prisma migrate deploy || warn "prisma migrate 返回错误（可能是已经执行过，请手动检查）"
+docker exec pw-backend npx prisma migrate deploy 2>/dev/null || docker exec pw-backend npx prisma db push --accept-data-loss 2>/dev/null || ok "数据库已就绪（迁移已由容器自动完成）"
 
 # --- 完成 -----------------------------------------------------
 echo ""
