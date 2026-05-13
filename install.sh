@@ -74,16 +74,26 @@ info "机器指纹: ${MACHINE_ID:0:16}..."
 info "验证激活码并换取镜像拉取凭证..."
 NOW_MS=$(($(date +%s)*1000))
 
-AUTH_RESP=$(curl -fsS --max-time 30 -X POST "${DEPLOY_PROXY_URL}/auth" \
+RESP_FILE=$(mktemp)
+HTTP_CODE=$(curl -sS --max-time 30 -w '%{http_code}' -o "${RESP_FILE}" -X POST "${DEPLOY_PROXY_URL}/auth" \
   -H "Content-Type: application/json" \
-  -d "{\"code\":\"${LICENSE_CODE}\",\"machineId\":\"${MACHINE_ID}\",\"timestamp\":${NOW_MS}}" 2>/dev/null) || {
-    fail "部署代理不可达 (${DEPLOY_PROXY_URL})，请检查网络或联系服务商"
-  }
+  -d "{\"code\":\"${LICENSE_CODE}\",\"machineId\":\"${MACHINE_ID}\",\"timestamp\":${NOW_MS}}" 2>/dev/null) || HTTP_CODE="000"
+AUTH_RESP=$(cat "${RESP_FILE}" 2>/dev/null)
+rm -f "${RESP_FILE}"
+
+if [[ "${HTTP_CODE}" == "000" ]]; then
+  fail "部署代理不可达 (${DEPLOY_PROXY_URL})，请检查网络或联系服务商"
+fi
+
+if [[ "${HTTP_CODE}" -ge 400 ]]; then
+  ERROR_MSG=$(echo "${AUTH_RESP}" | grep -oE '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
+  fail "激活失败 (HTTP ${HTTP_CODE}): ${ERROR_MSG:-未知错误}"
+fi
 
 SUCCESS=$(echo "${AUTH_RESP}" | grep -oE '"success":[a-z]*' | head -1 | cut -d: -f2)
 if [[ "${SUCCESS}" != "true" ]]; then
   ERROR_MSG=$(echo "${AUTH_RESP}" | grep -oE '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
-  fail "激活失败: ${ERROR_MSG:-未知错误}。响应: ${AUTH_RESP}"
+  fail "激活失败: ${ERROR_MSG:-未知错误}"
 fi
 
 # Pull fields from JSON response
