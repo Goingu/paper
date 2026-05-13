@@ -70,6 +70,7 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+      - /etc/machine-id:/etc/machine-id:ro
     healthcheck:
       test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3001/public-config']
       interval: 30s
