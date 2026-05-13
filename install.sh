@@ -143,7 +143,13 @@ if [[ ! -f .env ]]; then
   JWT_SECRET=$(openssl rand -hex 32 2>/dev/null || echo "change-me-jwt-$(date +%s)")
   JWT_REFRESH_SECRET=$(openssl rand -hex 32 2>/dev/null || echo "change-me-refresh-$(date +%s)")
   ENCRYPTION_KEY=$(openssl rand -hex 32 2>/dev/null || echo "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-  SERVER_IP=$(curl -fsS --max-time 5 ifconfig.me 2>/dev/null || echo 'localhost')
+  SERVER_IP=$(curl -fsS --max-time 5 ifconfig.me 2>/dev/null \
+    || curl -fsS --max-time 5 icanhazip.com 2>/dev/null \
+    || curl -fsS --max-time 5 api.ipify.org 2>/dev/null \
+    || hostname -I 2>/dev/null | awk '{print $1}' \
+    || echo 'localhost')
+  # 去掉可能的尾部换行/空格
+  SERVER_IP=$(echo "${SERVER_IP}" | tr -d '[:space:]')
 
   cat > .env <<EOF
 # 激活码（不要泄露）
