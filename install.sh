@@ -183,6 +183,23 @@ done
 info "运行数据库迁移..."
 docker exec pw-backend npx prisma migrate deploy 2>/dev/null || docker exec pw-backend npx prisma db push --accept-data-loss 2>/dev/null || ok "数据库已就绪（迁移已由容器自动完成）"
 
+# --- 创建默认管理员 -------------------------------------------
+ADMIN_EMAIL="admin@paperbanana.com"
+ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin@$(date +%s | tail -c 6)")
+info "创建默认管理员账号..."
+ADMIN_RESP=$(curl -fsS --max-time 10 -X POST "http://127.0.0.1:8090/api/auth/bootstrap-admin" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"${ADMIN_EMAIL}\",\"name\":\"管理员\",\"password\":\"${ADMIN_PASS}\"}" 2>/dev/null) || true
+
+if echo "${ADMIN_RESP}" | grep -q '"user"'; then
+  ok "管理员账号创建成功"
+else
+  # 可能已经存在管理员（重复部署），不影响
+  warn "管理员账号可能已存在（首次注册的用户即为管理员）"
+  ADMIN_EMAIL="(首个注册用户)"
+  ADMIN_PASS="(注册时自行设置)"
+fi
+
 # --- 完成 -----------------------------------------------------
 echo ""
 ok "部署完成！"
@@ -190,6 +207,11 @@ echo ""
 echo "  访问: ${GREEN}http://$(curl -fsS --max-time 3 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}'):${FRONTEND_PORT}${NC}"
 echo "  目录: ${DEPLOY_DIR}"
 echo "  配置: ${DEPLOY_DIR}/.env"
+echo ""
+echo "  管理员账号: ${GREEN}${ADMIN_EMAIL}${NC}"
+echo "  管理员密码: ${GREEN}${ADMIN_PASS}${NC}"
+echo ""
+echo "  ${YELLOW}⚠ 请立即登录后修改管理员密码！${NC}"
 echo ""
 echo "常用命令："
 echo "  查看状态: cd ${DEPLOY_DIR} && ${DC} ps"
