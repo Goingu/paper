@@ -184,9 +184,18 @@ info "运行数据库迁移..."
 docker exec pw-backend npx prisma migrate deploy 2>/dev/null || docker exec pw-backend npx prisma db push --accept-data-loss 2>/dev/null || ok "数据库已就绪（迁移已由容器自动完成）"
 
 # --- 创建默认管理员 -------------------------------------------
-ADMIN_EMAIL="admin@paperbanana.com"
-ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin@$(date +%s | tail -c 6)")
-info "创建默认管理员账号..."
+echo ""
+echo "${BLUE}请设置管理员账号：${NC}"
+read -p "  管理员邮箱: " ADMIN_EMAIL
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@paperbanana.com}"
+read -sp "  管理员密码: " ADMIN_PASS
+echo ""
+if [[ -z "${ADMIN_PASS}" ]]; then
+  ADMIN_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | cut -c1-12 || echo "Admin123456")
+  echo "  ${YELLOW}未输入密码，已自动生成: ${ADMIN_PASS}${NC}"
+fi
+
+info "创建管理员账号..."
 ADMIN_RESP=$(curl -fsS --max-time 10 -X POST "http://127.0.0.1:8090/api/auth/bootstrap-admin" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"${ADMIN_EMAIL}\",\"name\":\"管理员\",\"password\":\"${ADMIN_PASS}\"}" 2>/dev/null) || true
@@ -194,10 +203,7 @@ ADMIN_RESP=$(curl -fsS --max-time 10 -X POST "http://127.0.0.1:8090/api/auth/boo
 if echo "${ADMIN_RESP}" | grep -q '"user"'; then
   ok "管理员账号创建成功"
 else
-  # 可能已经存在管理员（重复部署），不影响
   warn "管理员账号可能已存在（首次注册的用户即为管理员）"
-  ADMIN_EMAIL="(首个注册用户)"
-  ADMIN_PASS="(注册时自行设置)"
 fi
 
 # --- 完成 -----------------------------------------------------
