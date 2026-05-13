@@ -72,7 +72,7 @@ info "机器指纹: ${MACHINE_ID:0:16}..."
 
 # --- 向部署代理换取 docker 凭证 -------------------------------
 info "验证激活码并换取镜像拉取凭证..."
-NOW_MS=$(($(date +%s%N)/1000000 2>/dev/null || echo $(($(date +%s)*1000))))
+NOW_MS=$(($(date +%s)*1000))
 
 AUTH_RESP=$(curl -fsS --max-time 30 -X POST "${DEPLOY_PROXY_URL}/auth" \
   -H "Content-Type: application/json" \
