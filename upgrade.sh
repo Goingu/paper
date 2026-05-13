@@ -33,14 +33,26 @@ fi
 MACHINE_ID=$(echo -n "paper-writing:${MACHINE_SEED}" | sha256sum | awk '{print $1}')
 
 info "重新获取 GHCR 凭证..."
-AUTH_RESP=$(curl -fsS --max-time 30 -X POST "${DEPLOY_PROXY_URL}/auth" \
+RESP_FILE=$(mktemp)
+HTTP_CODE=$(curl -sS --max-time 30 -w '%{http_code}' -o "${RESP_FILE}" -X POST "${DEPLOY_PROXY_URL}/auth" \
   -H "Content-Type: application/json" \
-  -d "{\"code\":\"${LICENSE_CODE}\",\"machineId\":\"${MACHINE_ID}\",\"timestamp\":$(($(date +%s)*1000))}") || fail "部署代理不可达"
+  -d "{\"code\":\"${LICENSE_CODE}\",\"machineId\":\"${MACHINE_ID}\",\"timestamp\":$(($(date +%s)*1000))}" 2>/dev/null) || HTTP_CODE="000"
+AUTH_RESP=$(cat "${RESP_FILE}" 2>/dev/null)
+rm -f "${RESP_FILE}"
+
+if [[ "${HTTP_CODE}" == "000" ]]; then
+  fail "部署代理不可达 (${DEPLOY_PROXY_URL})，请检查网络或联系服务商"
+fi
+
+if [[ "${HTTP_CODE}" -ge 400 ]]; then
+  ERR=$(echo "${AUTH_RESP}" | grep -oE '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
+  fail "授权验证失败 (HTTP ${HTTP_CODE}): ${ERR:-未知错误}"
+fi
 
 SUCCESS=$(echo "${AUTH_RESP}" | grep -oE '"success":[a-z]*' | head -1 | cut -d: -f2)
 if [[ "${SUCCESS}" != "true" ]]; then
   ERR=$(echo "${AUTH_RESP}" | grep -oE '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
-  fail "授权验证失败: ${ERR}"
+  fail "授权验证失败: ${ERR:-未知错误}"
 fi
 
 REGISTRY=$(echo "${AUTH_RESP}" | grep -oE '"registry":"[^"]*"' | head -1 | cut -d'"' -f4)
