@@ -58,10 +58,18 @@ fi
 REGISTRY=$(echo "${AUTH_RESP}" | grep -oE '"registry":"[^"]*"' | head -1 | cut -d'"' -f4)
 GHCR_USER=$(echo "${AUTH_RESP}" | grep -oE '"username":"[^"]*"' | head -1 | cut -d'"' -f4)
 GHCR_TOKEN=$(echo "${AUTH_RESP}" | grep -oE '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+BACKEND_PYTHON_IMAGE_RESP=$(echo "${AUTH_RESP}" | grep -oE '"backendPythonImage":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 echo "${GHCR_TOKEN}" | docker login "${REGISTRY}" -u "${GHCR_USER}" --password-stdin >/dev/null
 
 if docker compose version >/dev/null 2>&1; then DC="docker compose"; else DC="docker-compose"; fi
+
+# 兼容老 .env：若没有 BACKEND_PYTHON_IMAGE 键则补上（升级到含 backend-python 的版本）
+if ! grep -q '^BACKEND_PYTHON_IMAGE=' .env; then
+  IMG="${BACKEND_PYTHON_IMAGE_RESP:-ghcr.io/goingu/paper-writing-standalone/backend-python}"
+  echo "BACKEND_PYTHON_IMAGE=${IMG}" >> .env
+  info "已在 .env 写入 BACKEND_PYTHON_IMAGE=${IMG}"
+fi
 
 info "下载最新 docker-compose.yml..."
 curl -fsSL "${REPO_RAW_BASE}/docker-compose.yml" -o docker-compose.yml
@@ -70,7 +78,7 @@ info "拉取最新镜像..."
 ${DC} pull
 
 info "重启容器..."
-${DC} up -d --force-recreate backend frontend
+${DC} up -d --force-recreate backend backend-python frontend
 
 info "等待后端就绪..."
 for i in $(seq 1 30); do

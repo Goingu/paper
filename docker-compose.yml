@@ -63,6 +63,9 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       # License
       LICENSE_CODE: ${LICENSE_CODE}
+      # PPT 导出服务(容器网络内 5001)
+      PYTHON_EXPORT_URL: ${PYTHON_EXPORT_URL:-http://backend-python:5001}
+      EXPORT_SERVICE_API_KEY: ${EXPORT_SERVICE_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +79,35 @@ services:
       interval: 30s
       timeout: 10s
       start_period: 30s
+      retries: 3
+    networks:
+      - pw-network
+
+  # ============================================
+  # Python 导出服务（可编辑 PPTX / PDF）
+  # 仅在容器网络内 5001 暴露,不映射宿主端口
+  # backend 通过 PYTHON_EXPORT_URL=http://backend-python:5001 调用
+  # ============================================
+  backend-python:
+    image: ${BACKEND_PYTHON_IMAGE:-ghcr.io/goingu/paper-writing-standalone/backend-python}:${IMAGE_TAG:-main}
+    container_name: pw-backend-python
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      FLASK_ENV: production
+      LOG_LEVEL: ${PYTHON_EXPORT_LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${PYTHON_EXPORT_CORS_ORIGINS:-http://backend:3001}
+      EXPORT_SERVICE_API_KEY: ${EXPORT_SERVICE_API_KEY:-}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-}
+      SILICONFLOW_OCR_MODEL: ${SILICONFLOW_OCR_MODEL:-Qwen/Qwen2-VL-72B-Instruct}
+      SILICONFLOW_BASE_URL: ${SILICONFLOW_BASE_URL:-https://api.siliconflow.cn/v1}
+      BAIDU_API_KEY: ${BAIDU_API_KEY:-}
+      BAIDU_SECRET_KEY: ${BAIDU_SECRET_KEY:-}
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:5001/health']
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
       retries: 3
     networks:
       - pw-network

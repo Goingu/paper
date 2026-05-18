@@ -113,11 +113,18 @@ GHCR_TOKEN=$(echo "${AUTH_RESP}" | grep -oE '"token":"[^"]*"' | head -1 | cut -d
 REGISTRY=$(echo "${AUTH_RESP}" | grep -oE '"registry":"[^"]*"' | head -1 | cut -d'"' -f4)
 BACKEND_IMAGE=$(echo "${AUTH_RESP}" | grep -oE '"backendImage":"[^"]*"' | head -1 | cut -d'"' -f4)
 FRONTEND_IMAGE=$(echo "${AUTH_RESP}" | grep -oE '"frontendImage":"[^"]*"' | head -1 | cut -d'"' -f4)
+BACKEND_PYTHON_IMAGE=$(echo "${AUTH_RESP}" | grep -oE '"backendPythonImage":"[^"]*"' | head -1 | cut -d'"' -f4)
 IMAGE_TAG=$(echo "${AUTH_RESP}" | grep -oE '"imageTag":"[^"]*"' | head -1 | cut -d'"' -f4)
 LIC_EXPIRY=$(echo "${AUTH_RESP}" | grep -oE '"licenseExpiresAt":"[^"]*"' | head -1 | cut -d'"' -f4)
 
 if [[ -z "${GHCR_TOKEN}" || -z "${BACKEND_IMAGE}" || -z "${FRONTEND_IMAGE}" ]]; then
   fail "部署代理返回数据不完整: ${AUTH_RESP}"
+fi
+
+# 旧版 deploy-proxy 不会返回 backendPythonImage，按默认值兜底（不阻塞部署）
+if [[ -z "${BACKEND_PYTHON_IMAGE}" ]]; then
+  BACKEND_PYTHON_IMAGE="ghcr.io/goingu/paper-writing-standalone/backend-python"
+  warn "部署代理未返回 backendPythonImage，使用默认值 ${BACKEND_PYTHON_IMAGE}"
 fi
 
 ok "验证通过，授权到期: ${LIC_EXPIRY:-未知}"
@@ -158,6 +165,7 @@ LICENSE_CODE=${LICENSE_CODE}
 # 镜像信息
 BACKEND_IMAGE=${BACKEND_IMAGE}
 FRONTEND_IMAGE=${FRONTEND_IMAGE}
+BACKEND_PYTHON_IMAGE=${BACKEND_PYTHON_IMAGE}
 IMAGE_TAG=${IMAGE_TAG}
 
 # 端口
@@ -184,6 +192,13 @@ AUTH_COOKIE_SAMESITE=lax
 AUTH_COOKIE_PATH=/
 AUTH_COOKIE_DOMAIN=
 CORS_ORIGINS=http://${SERVER_IP}:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT}
+
+# Python 导出服务（容器网络内访问，不需要改）
+PYTHON_EXPORT_URL=http://backend-python:5001
+# OCR 凭证（可选,留空则导出走 mock OCR）
+SILICONFLOW_API_KEY=
+BAIDU_API_KEY=
+BAIDU_SECRET_KEY=
 EOF
   ok ".env 已生成: ${DEPLOY_DIR}/.env"
 else
